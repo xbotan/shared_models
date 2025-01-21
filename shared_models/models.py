@@ -10,6 +10,9 @@ from sqlalchemy_serializer import SerializerMixin
 class Account(Base, SerializerMixin):
     __tablename__ = "accounts"
 
+    # Controlar la serialización
+    serialize_rules = ('-contacts.account',)
+
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))  # Almacena UUID como texto
     date_entered = Column(DateTime, default=datetime.utcnow)
     name = Column(String(255), nullable=False)
@@ -26,6 +29,9 @@ class Account(Base, SerializerMixin):
 
 class Contact(Base, SerializerMixin):
     __tablename__ = "contacts"
+
+    # Controlar la serialización
+    serialize_rules = ('-account.contacts',)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     deleted = Column(Boolean, default=False)
