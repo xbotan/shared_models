@@ -4,9 +4,10 @@ from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
 from shared_models.database import Base  # Usa el Base definido en shared_models.database
+from sqlalchemy_serializer import SerializerMixin
 
 
-class Account(Base):
+class Account(Base, SerializerMixin):
     __tablename__ = "accounts"
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))  # Almacena UUID como texto
@@ -23,7 +24,7 @@ class Account(Base):
     contacts = relationship("Contact", back_populates="account", cascade="all, delete-orphan")
 
 
-class Contact(Base):
+class Contact(Base, SerializerMixin):
     __tablename__ = "contacts"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
