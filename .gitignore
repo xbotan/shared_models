@@ -1,4 +1,9 @@
 .idea/
 dist/
 build/
+venv/
 shared_models.egg-info/
+.env
+alembic.ini
+
+*.pyc

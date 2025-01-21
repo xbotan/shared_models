@@ -1,0 +1,5 @@
+python-dotenv==1.0.1
+alembic==1.14.0
+SQLAlchemy==2.0.37
+SQLAlchemy-serializer==1.4.12
+PyMySQL==1.1.1

@@ -1,21 +1,22 @@
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
-
-Base = declarative_base()
+from shared_models.database import Base  # Usa el Base definido en shared_models.database
 
 
 class Account(Base):
     __tablename__ = "accounts"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))  # Almacena UUID como texto
+    date_entered = Column(DateTime, default=datetime.utcnow)
     name = Column(String(255), nullable=False)
-    account_type = Column(String(50))
-    billing_address_city = Column(String(100))
-    phone_office = Column(String(20))
-    RUC_code = Column(String(20), unique=True, nullable=False)
-    shipping_address_street = Column(String(255))
+    account_type = Column(String(50), nullable=True)
+    billing_address_city = Column(String(100), nullable=True)
+    phone_office = Column(String(50), nullable=True)
+    RUC_code = Column(String(11), unique=True, nullable=False)
+    shipping_address_street = Column(String(255), nullable=True)
     deleted = Column(Boolean, default=False)
 
     # Relación con Contact
