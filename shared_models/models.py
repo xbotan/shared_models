@@ -1,8 +1,9 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, Text, Enum
 from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
+from enum import Enum as PyEnum
 from shared_models.database import Base  # Usa el Base definido en shared_models.database
 from sqlalchemy_serializer import SerializerMixin
 
@@ -25,6 +26,7 @@ class Account(Base, SerializerMixin):
 
     # Relación con Contact
     contacts = relationship("Contact", back_populates="account", cascade="all, delete-orphan")
+    odts = relationship("ODT", back_populates="account", cascade="all, delete-orphan")
 
 
 class Contact(Base, SerializerMixin):
@@ -49,3 +51,78 @@ class Contact(Base, SerializerMixin):
     # Relación con Account
     account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False)
     account = relationship("Account", back_populates="contacts")
+    odts = relationship("ODT", back_populates="contact", cascade="all, delete-orphan")
+
+
+# ENUM para tipos de archivo
+class FileType(PyEnum):
+    COST_BUDGET = "cost_budget"
+    PURCHASE_COMPLIANCE = "purchase_compliance"
+    REFERENCE_IMAGE = "reference_image"
+
+
+# Entidad unificada para archivos
+class FileAttachment(Base, SerializerMixin):
+    __tablename__ = "file_attachments"
+
+    serialize_rules = ('-odt.file_attachments',)
+
+    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    file_path = Column(String(255), nullable=False)
+    file_type = Column(Enum(FileType), nullable=False)  # Tipo del archivo
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    description = Column(Text)  # Campo adicional opcional
+
+    # Relación con ODT
+    odt_id = Column(CHAR(36), ForeignKey("odts.id"), nullable=False)
+    odt = relationship("ODT", back_populates="file_attachments")
+
+
+class ODT(Base, SerializerMixin):
+    __tablename__ = "odts"
+
+    serialize_rules = (
+        '-account.odts',
+        '-contact.odts',
+        '-file_attachments.odt',
+        # Reglas para separar archivos por tipo en la serialización
+        '_cost_budget_docs',
+        '_purchase_compliance_docs',
+        '_reference_images'
+    )
+
+    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    date_entered = Column(DateTime, default=datetime.utcnow)
+    project_name = Column(String(255), nullable=False)
+    price = Column(Numeric(10, 2))  # Precio con 2 decimales
+    delivery_type = Column(String(50))  # Ej: pickup, point_delivery, etc.
+    delivery_address = Column(String(255))
+    delivery_contact = Column(String(100))  # Nombre de contacto
+    delivery_phone = Column(String(20))
+    delivery_date = Column(DateTime)
+    delivery_obs = Column(Text)  # Observaciones largas
+    deleted = Column(Boolean, default=False)
+
+    # Claves foráneas
+    account_id = Column(CHAR(36), ForeignKey("accounts.id"), nullable=False)
+    contact_id = Column(CHAR(36), ForeignKey("contacts.id"), nullable=False)
+
+    # Relaciones
+    account = relationship("Account", back_populates="odts")
+    contact = relationship("Contact", back_populates="odts")
+
+    # Relación unificada de archivos
+    file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan")
+
+    # Propiedades para acceder a archivos por tipo
+    @property
+    def _cost_budget_docs(self):
+        return [f for f in self.file_attachments if f.file_type == FileType.COST_BUDGET]
+
+    @property
+    def _purchase_compliance_docs(self):
+        return [f for f in self.file_attachments if f.file_type == FileType.PURCHASE_COMPLIANCE]
+
+    @property
+    def _reference_images(self):
+        return [f for f in self.file_attachments if f.file_type == FileType.REFERENCE_IMAGE]
