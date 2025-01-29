@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from shared_models.database import Base  # Usa el Base definido en shared_models.database
 from sqlalchemy_serializer import SerializerMixin
-from sqlalchemy import event, DDL
+from sqlalchemy import text, event, DDL
 
 
 class Account(Base, SerializerMixin):
@@ -146,12 +146,13 @@ event.listen(
 
 @event.listens_for(ODT, 'before_insert')
 def generate_odt_number(mapper, connection, target):
+    # Usa text() para las consultas SQL
     connection.execute(
-        "UPDATE odt_number_counter SET last_number = last_number + 1"
+        text("UPDATE odt_number_counter SET last_number = last_number + 1")
     )
 
     result = connection.execute(
-        "SELECT last_number FROM odt_number_counter"
+        text("SELECT last_number FROM odt_number_counter")
     )
     new_number = result.scalar()
 
