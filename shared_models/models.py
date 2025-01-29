@@ -129,36 +129,16 @@ class ODT(Base, SerializerMixin):
     def _reference_images(self):
         return [f for f in self.file_attachments if f.file_type == FileType.REFERENCE_IMAGE]
 
+    @classmethod
+    def generate_next_odt_number(cls, session):
+        # Bloquear la tabla para evitar condiciones de carrera
+        counter = session.query(ODTNumberCounter).with_for_update().first()
+        counter.last_number += 1
+        session.commit()
+        return counter.last_number
+
 
 class ODTNumberCounter(Base):
     __tablename__ = "odt_number_counter"
     id = Column(Integer, primary_key=True, autoincrement=True)
     last_number = Column(Integer, default=0, nullable=False)
-
-
-# Crear tabla contadora (si no existe)
-event.listen(
-    ODTNumberCounter.__table__,
-    "after_create",
-    DDL("INSERT INTO odt_number_counter (last_number) VALUES (0)")
-)
-
-
-@event.listens_for(ODT, 'before_insert')
-def generate_odt_number(mapper, connection, target):
-    # Evitar recursión
-    if hasattr(target, '_odt_number_generated'):
-        return
-
-    target._odt_number_generated = True  # Marcar como procesado
-
-    # Actualizar contador
-    connection.execute(
-        text("UPDATE odt_number_counter SET last_number = last_number + 1")
-    )
-
-    # Obtener nuevo número
-    result = connection.execute(
-        text("SELECT last_number FROM odt_number_counter")
-    )
-    target.odt_number = result.scalar()
