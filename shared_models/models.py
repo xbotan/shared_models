@@ -115,8 +115,15 @@ class ODT(Base, SerializerMixin):
     # Relación unificada de archivos
     file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan")
 
-    def to_dict(self, include_relations=False):
-        base_dict = super().to_dict(rules=('-account', '-contact', '-file_attachments'))
+    def to_dict(self, include_relations=False, include_files=False):
+        base_dict = super().to_dict(rules=(
+            '-account',
+            '-contact',
+            '-file_attachments',
+            '-_cost_budget_docs',
+            '-_purchase_compliance_docs',
+            '-_reference_images'
+        ))
 
         # Campos básicos
         data = {
@@ -126,11 +133,33 @@ class ODT(Base, SerializerMixin):
             "delivery_date": self.delivery_date.isoformat() if self.delivery_date else None,
         }
 
-        # Incluir relaciones solo si se solicita
+        # Incluir relaciones básicas si se solicita
         if include_relations:
-            data["account"] = self.account.to_dict(rules=('-contacts', '-odts')) if self.account else None
-            data["contact"] = self.contact.to_dict(rules=('-account', '-odts')) if self.contact else None
-            data["file_attachments"] = [f.to_dict(rules=('-odt',)) for f in self.file_attachments]
+            data.update({
+                "account": self.account.to_dict(rules=('-contacts', '-odts')) if self.account else None,
+                "contact": self.contact.to_dict(rules=('-account', '-odts')) if self.contact else None,
+                "file_attachments": [f.to_dict(rules=('-odt',)) for f in self.file_attachments]
+            })
+
+        # Incluir archivos categorizados si se solicita
+        if include_files:
+            data["files"] = {
+                "cost_budget_docs": [
+                    f.to_dict(rules=('-odt',))
+                    for f in self.file_attachments
+                    if f.file_type == FileType.COST_BUDGET.value
+                ],
+                "purchase_compliance_docs": [
+                    f.to_dict(rules=('-odt',))
+                    for f in self.file_attachments
+                    if f.file_type == FileType.PURCHASE_COMPLIANCE.value
+                ],
+                "reference_images": [
+                    f.to_dict(rules=('-odt',))
+                    for f in self.file_attachments
+                    if f.file_type == FileType.REFERENCE_IMAGE.value
+                ]
+            }
 
         return data
 
