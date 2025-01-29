@@ -136,7 +136,7 @@ class ODTNumberCounter(Base):
     last_number = Column(Integer, default=0, nullable=False)
 
 
-# Crea la tabla contador al inicio (si no existe)
+# Crear tabla contadora (si no existe)
 event.listen(
     ODTNumberCounter.__table__,
     "after_create",
@@ -146,9 +146,22 @@ event.listen(
 
 @event.listens_for(ODT, 'before_insert')
 def generate_odt_number(mapper, connection, target):
-    # Bloquea la fila del contador y actualiza
-    result = connection.execute(
-        "UPDATE odt_number_counter SET last_number = last_number + 1 RETURNING last_number"
-    )
-    new_number = result.scalar()
-    target.odt_number = new_number
+    # Iniciar una transacción
+    trans = connection.begin()
+    try:
+        # Paso 1: Actualizar el contador
+        connection.execute(
+            "UPDATE odt_number_counter SET last_number = last_number + 1"
+        )
+
+        # Paso 2: Obtener el nuevo valor
+        result = connection.execute(
+            "SELECT last_number FROM odt_number_counter"
+        )
+        new_number = result.scalar()
+
+        target.odt_number = new_number
+        trans.commit()
+    except:
+        trans.rollback()
+        raise
