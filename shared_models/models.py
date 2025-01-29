@@ -13,7 +13,7 @@ class Account(Base, SerializerMixin):
     __tablename__ = "accounts"
 
     # Controlar la serialización
-    serialize_rules = ('-contacts.account',)
+    serialize_rules = ('-contacts.account', '-odts.account')
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))  # Almacena UUID como texto
     date_entered = Column(DateTime, default=datetime.utcnow)
@@ -34,7 +34,7 @@ class Contact(Base, SerializerMixin):
     __tablename__ = "contacts"
 
     # Controlar la serialización
-    serialize_rules = ('-account.contacts',)
+    serialize_rules = ('-account.contacts', '-odts.contacts')
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     deleted = Column(Boolean, default=False)
@@ -66,7 +66,7 @@ class FileType(PyEnum):
 class FileAttachment(Base, SerializerMixin):
     __tablename__ = "file_attachments"
 
-    serialize_rules = ('-odt.file_attachments',)
+    serialize_rules = ('-odt',)  # Excluye completamente la relación ODT
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     file_path = Column(String(255), nullable=False)
@@ -83,13 +83,12 @@ class ODT(Base, SerializerMixin):
     __tablename__ = "odts"
 
     serialize_rules = (
-        '-account.odts',
-        '-contact.odts',
-        '-file_attachments.odt',
-        # Reglas para separar archivos por tipo en la serialización
-        '_cost_budget_docs',
-        '_purchase_compliance_docs',
-        '_reference_images'
+        '-account.odts',  # Evita que Account serialice sus ODTs
+        '-contact.odts',  # Evita que Contact serialice sus ODTs
+        '-file_attachments.odt',  # Evita que FileAttachment serialice el ODT padre
+        '-_cost_budget_docs',  # Excluye propiedades calculadas
+        '-_purchase_compliance_docs',
+        '-_reference_images'
     )
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -115,6 +114,25 @@ class ODT(Base, SerializerMixin):
 
     # Relación unificada de archivos
     file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan")
+
+    def to_dict(self, include_relations=False):
+        base_dict = super().to_dict(rules=('-account', '-contact', '-file_attachments'))
+
+        # Campos básicos
+        data = {
+            **base_dict,
+            "account_id": self.account_id,
+            "contact_id": self.contact_id,
+            "delivery_date": self.delivery_date.isoformat() if self.delivery_date else None,
+        }
+
+        # Incluir relaciones solo si se solicita
+        if include_relations:
+            data["account"] = self.account.to_dict(rules=('-contacts', '-odts')) if self.account else None
+            data["contact"] = self.contact.to_dict(rules=('-account', '-odts')) if self.contact else None
+            data["file_attachments"] = [f.to_dict(rules=('-odt',)) for f in self.file_attachments]
+
+        return data
 
     # Propiedades para acceder a archivos por tipo
     @property
