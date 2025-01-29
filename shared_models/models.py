@@ -146,14 +146,19 @@ event.listen(
 
 @event.listens_for(ODT, 'before_insert')
 def generate_odt_number(mapper, connection, target):
-    # Usa text() para las consultas SQL
+    # Evitar recursión
+    if hasattr(target, '_odt_number_generated'):
+        return
+
+    target._odt_number_generated = True  # Marcar como procesado
+
+    # Actualizar contador
     connection.execute(
         text("UPDATE odt_number_counter SET last_number = last_number + 1")
     )
 
+    # Obtener nuevo número
     result = connection.execute(
         text("SELECT last_number FROM odt_number_counter")
     )
-    new_number = result.scalar()
-
-    target.odt_number = new_number
+    target.odt_number = result.scalar()
