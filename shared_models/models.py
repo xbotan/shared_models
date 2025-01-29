@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, Text, Enum
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, Text, Enum, Integer
 from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship
 import uuid
@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from shared_models.database import Base  # Usa el Base definido en shared_models.database
 from sqlalchemy_serializer import SerializerMixin
+from sqlalchemy import event, DDL
 
 
 class Account(Base, SerializerMixin):
@@ -92,6 +93,7 @@ class ODT(Base, SerializerMixin):
     )
 
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    odt_number = Column(Integer, nullable=False, unique=True)  # Nuevo campo secuencial
     date_entered = Column(DateTime, default=datetime.utcnow)
     project_name = Column(String(255), nullable=False)
     price = Column(Numeric(10, 2))  # Precio con 2 decimales
@@ -126,3 +128,27 @@ class ODT(Base, SerializerMixin):
     @property
     def _reference_images(self):
         return [f for f in self.file_attachments if f.file_type == FileType.REFERENCE_IMAGE]
+
+
+class ODTNumberCounter(Base):
+    __tablename__ = "odt_number_counter"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    last_number = Column(Integer, default=0, nullable=False)
+
+
+# Crea la tabla contador al inicio (si no existe)
+event.listen(
+    ODTNumberCounter.__table__,
+    "after_create",
+    DDL("INSERT INTO odt_number_counter (last_number) VALUES (0)")
+)
+
+
+@event.listens_for(ODT, 'before_insert')
+def generate_odt_number(mapper, connection, target):
+    # Bloquea la fila del contador y actualiza
+    result = connection.execute(
+        "UPDATE odt_number_counter SET last_number = last_number + 1 RETURNING last_number"
+    )
+    new_number = result.scalar()
+    target.odt_number = new_number
