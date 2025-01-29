@@ -145,22 +145,18 @@ class ODT(Base, SerializerMixin):
         if include_files:
             data["files"] = {
                 "cost_budget_docs": [
-                    f.to_dict(rules=('-odt',))
-                    for f in self.file_attachments
+                    f.to_dict() for f in self.file_attachments
                     if f.file_type == FileType.COST_BUDGET.value
                 ],
                 "purchase_compliance_docs": [
-                    f.to_dict(rules=('-odt',))
-                    for f in self.file_attachments
+                    f.to_dict() for f in self.file_attachments
                     if f.file_type == FileType.PURCHASE_COMPLIANCE.value
                 ],
                 "reference_images": [
-                    f.to_dict(rules=('-odt',))
-                    for f in self.file_attachments
+                    f.to_dict() for f in self.file_attachments
                     if f.file_type == FileType.REFERENCE_IMAGE.value
                 ]
             }
-
         return data
 
     # Propiedades para acceder a archivos por tipo
