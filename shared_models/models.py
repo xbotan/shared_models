@@ -126,7 +126,6 @@ class ODT(Base, SerializerMixin):
             '-_reference_images'
         ))
 
-        # Campos básicos
         data = {
             **base_dict,
             "account_id": self.account_id,
@@ -134,33 +133,32 @@ class ODT(Base, SerializerMixin):
             "delivery_date": self.delivery_date.isoformat() if self.delivery_date else None,
         }
 
-        # Incluir relaciones básicas si se solicita
-        print(f"Archivos adjuntos para ODT {self.id}: {self.file_attachments}")  # Debug
-
         if include_relations:
-            print(f"Tipos de archivo encontrados: {[f.file_type for f in self.file_attachments]}")
             data.update({
                 "account": self.account.to_dict(rules=('-contacts', '-odts')) if self.account else None,
                 "contact": self.contact.to_dict(rules=('-account', '-odts')) if self.contact else None,
                 "file_attachments": [f.to_dict(rules=('-odt',)) for f in self.file_attachments]
             })
 
-        # Incluir archivos categorizados si se solicita
         if include_files:
             data["files"] = {
                 "cost_budget_docs": [
-                    f.to_dict() for f in self.file_attachments
-                    if f.file_type == FileType.COST_BUDGET.value
+                    f.to_dict(rules=('-odt',))
+                    for f in self.file_attachments
+                    if f.file_type == FileType.COST_BUDGET  # <-- Comparación directa con el Enum
                 ],
                 "purchase_compliance_docs": [
-                    f.to_dict() for f in self.file_attachments
-                    if f.file_type == FileType.PURCHASE_COMPLIANCE.value
+                    f.to_dict(rules=('-odt',))
+                    for f in self.file_attachments
+                    if f.file_type == FileType.PURCHASE_COMPLIANCE
                 ],
                 "reference_images": [
-                    f.to_dict() for f in self.file_attachments
-                    if f.file_type == FileType.REFERENCE_IMAGE.value
+                    f.to_dict(rules=('-odt',))
+                    for f in self.file_attachments
+                    if f.file_type == FileType.REFERENCE_IMAGE
                 ]
             }
+
         return data
 
     # Propiedades para acceder a archivos por tipo
