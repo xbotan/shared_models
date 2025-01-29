@@ -113,7 +113,8 @@ class ODT(Base, SerializerMixin):
     contact = relationship("Contact", back_populates="odts")
 
     # Relación unificada de archivos
-    file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan")
+    # file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan")
+    file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan", lazy="joined") # Carga eager
 
     def to_dict(self, include_relations=False, include_files=False):
         base_dict = super().to_dict(rules=(
@@ -134,7 +135,10 @@ class ODT(Base, SerializerMixin):
         }
 
         # Incluir relaciones básicas si se solicita
+        print(f"Archivos adjuntos para ODT {self.id}: {self.file_attachments}")  # Debug
+
         if include_relations:
+            print(f"Tipos de archivo encontrados: {[f.file_type for f in self.file_attachments]}")
             data.update({
                 "account": self.account.to_dict(rules=('-contacts', '-odts')) if self.account else None,
                 "contact": self.contact.to_dict(rules=('-account', '-odts')) if self.contact else None,
