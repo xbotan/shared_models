@@ -1,12 +1,13 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, Text, Enum, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, Text, Enum, Integer, Index
 from sqlalchemy.dialects.mysql import CHAR
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign, remote, session as object_session
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 from shared_models.database import Base  # Usa el Base definido en shared_models.database
 from sqlalchemy_serializer import SerializerMixin
-from sqlalchemy import text, event, DDL
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.sql import and_  # Importa `and_` para filtrar relaciones en SQLAlchemy
 
 
 class Account(Base, SerializerMixin):
@@ -28,6 +29,19 @@ class Account(Base, SerializerMixin):
     # Relación con Contact
     contacts = relationship("Contact", back_populates="account", cascade="all, delete-orphan")
     odts = relationship("ODT", back_populates="account", cascade="all, delete-orphan")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Generar UUID si no se proporciona
+        if not self.id:
+            self.id = str(uuid.uuid4())
+
+    @property
+    def file_attachments(self):
+        return object_session(self).query(FileAttachment).filter(
+            FileAttachment.parent_type == ParentType.ACCOUNT.value,
+            FileAttachment.parent_id == self.id
+        ).all()
 
 
 class Contact(Base, SerializerMixin):
@@ -54,29 +68,73 @@ class Contact(Base, SerializerMixin):
     account = relationship("Account", back_populates="contacts")
     odts = relationship("ODT", back_populates="contact", cascade="all, delete-orphan")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Generar UUID si no se proporciona
+        if not self.id:
+            self.id = str(uuid.uuid4())
+
+    @property
+    def file_attachments(self):
+        return object_session(self).query(FileAttachment).filter(
+            FileAttachment.parent_type == ParentType.CONTACT.value,
+            FileAttachment.parent_id == self.id
+        ).all()
+
 
 # ENUM para tipos de archivo
 class FileType(PyEnum):
     COST_BUDGET = "cost_budget"
     PURCHASE_COMPLIANCE = "purchase_compliance"
     REFERENCE_IMAGE = "reference_image"
+# ENUM para tipos de entidades relacionadas
+
+
+class ParentType(PyEnum):
+    ODT = "odt"
+    ACCOUNT = "account"
+    CONTACT = "contact"
+    # Agrega más tipos según necesites
 
 
 # Entidad unificada para archivos
+def generic_relationship(parent_type, parent_id):
+    def _generic_relationship(cls):
+        # Crea una relación dinámica
+        @declared_attr
+        def _relationship(cls):
+            return relationship(
+                'FileAttachment',
+                primaryjoin=and_(
+                    parent_type == cls.__name__.lower(),
+                    foreign(parent_id) == remote(cls.id)
+                ),
+                viewonly=True,
+                overlaps="related_entity"
+            )
+        return _relationship
+    return _generic_relationship
+
+
 class FileAttachment(Base, SerializerMixin):
     __tablename__ = "file_attachments"
+    __table_args__ = (
+        Index('ix_file_attachments_parent', 'parent_type', 'parent_id'),
+    )
 
-    serialize_rules = ('-odt',)  # Excluye completamente la relación ODT
+    serialize_rules = ('-related_entity.file_attachments',)  # Evitar recursión
 
-    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     file_path = Column(String(255), nullable=False)
     file_type = Column(Enum(FileType), nullable=False)  # Tipo del archivo
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     description = Column(Text)  # Campo adicional opcional
 
-    # Relación con ODT
-    odt_id = Column(CHAR(36), ForeignKey("odts.id"), nullable=False)
-    odt = relationship("ODT", back_populates="file_attachments")
+    parent_type = Column(Enum(ParentType), nullable=False)  # Tipo de entidad relacionada
+    parent_id = Column(String(36), nullable=False)  # ID de la entidad relacionada
+
+    # Relación dinámica (opcional, para acceso rápido)
+    related_entity = generic_relationship("parent_type", "parent_id")
 
 
 class ODT(Base, SerializerMixin):
@@ -112,9 +170,11 @@ class ODT(Base, SerializerMixin):
     account = relationship("Account", back_populates="odts")
     contact = relationship("Contact", back_populates="odts")
 
-    # Relación unificada de archivos
-    # file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan")
-    file_attachments = relationship("FileAttachment", back_populates="odt", cascade="all, delete-orphan", lazy="joined") # Carga eager
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Generar UUID si no se proporciona
+        if not self.id:
+            self.id = str(uuid.uuid4())
 
     def to_dict(self, include_relations=False, include_files=False):
         base_dict = super().to_dict(rules=(
@@ -143,23 +203,30 @@ class ODT(Base, SerializerMixin):
         if include_files:
             data["files"] = {
                 "cost_budget_docs": [
-                    f.to_dict(rules=('-odt',))
+                    f.to_dict(rules=('-related_entity',))
                     for f in self.file_attachments
-                    if f.file_type == FileType.COST_BUDGET  # <-- Comparación directa con el Enum
+                    if f.file_type == FileType.COST_BUDGET
                 ],
                 "purchase_compliance_docs": [
-                    f.to_dict(rules=('-odt',))
+                    f.to_dict(rules=('-related_entity',))
                     for f in self.file_attachments
                     if f.file_type == FileType.PURCHASE_COMPLIANCE
                 ],
                 "reference_images": [
-                    f.to_dict(rules=('-odt',))
+                    f.to_dict(rules=('-related_entity',))
                     for f in self.file_attachments
                     if f.file_type == FileType.REFERENCE_IMAGE
                 ]
             }
 
         return data
+
+    @property
+    def file_attachments(self):
+        return object_session(self).query(FileAttachment).filter(
+            FileAttachment.parent_type == ParentType.ODT.value,
+            FileAttachment.parent_id == self.id
+        ).all()
 
     # Propiedades para acceder a archivos por tipo
     @property
