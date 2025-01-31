@@ -140,6 +140,12 @@ class FileAttachment(Base, SerializerMixin):
 class ODT(Base, SerializerMixin):
     __tablename__ = "odts"
 
+    __table_args__ = (
+        Index('ix_odts_account_id', 'account_id'),
+        Index('ix_odts_contact_id', 'contact_id'),
+        Index('ix_odts_deleted', 'deleted'),
+    )
+
     serialize_rules = (
         '-account.odts',  # Evita que Account serialice sus ODTs
         '-contact.odts',  # Evita que Contact serialice sus ODTs
@@ -177,46 +183,26 @@ class ODT(Base, SerializerMixin):
             self.id = str(uuid.uuid4())
 
     def to_dict(self, include_relations=False, include_files=False):
-        base_dict = super().to_dict(rules=(
-            '-account',
-            '-contact',
-            '-file_attachments',
-            '-_cost_budget_docs',
-            '-_purchase_compliance_docs',
-            '-_reference_images'
+        base_data = super().to_dict(rules=(
+            '-account.odts',
+            '-contact.odts',
+            '-file_attachments.related_entity'
         ))
 
         data = {
-            **base_dict,
-            "account_id": self.account_id,
-            "contact_id": self.contact_id,
+            **base_data,
+            "odt_number": self.odt_number,
+            "date_entered": self.date_entered.isoformat() if self.date_entered else None,
             "delivery_date": self.delivery_date.isoformat() if self.delivery_date else None,
+            "account_name": self.account.name if self.account else None,
+            "contact_name": f"{self.contact.first_name} {self.contact.last_name}" if self.contact else None
         }
-
-        if include_relations:
-            data.update({
-                "account": self.account.to_dict(rules=('-contacts', '-odts')) if self.account else None,
-                "contact": self.contact.to_dict(rules=('-account', '-odts')) if self.contact else None,
-                "file_attachments": [f.to_dict(rules=('-odt',)) for f in self.file_attachments]
-            })
 
         if include_files:
             data["files"] = {
-                "cost_budget_docs": [
-                    f.to_dict(rules=('-related_entity',))
-                    for f in self.file_attachments
-                    if f.file_type == FileType.COST_BUDGET
-                ],
-                "purchase_compliance_docs": [
-                    f.to_dict(rules=('-related_entity',))
-                    for f in self.file_attachments
-                    if f.file_type == FileType.PURCHASE_COMPLIANCE
-                ],
-                "reference_images": [
-                    f.to_dict(rules=('-related_entity',))
-                    for f in self.file_attachments
-                    if f.file_type == FileType.REFERENCE_IMAGE
-                ]
+                "cost_budget": len(self._cost_budget_docs),
+                "purchase_compliance": len(self._purchase_compliance_docs),
+                "reference_images": len(self._reference_images)
             }
 
         return data
