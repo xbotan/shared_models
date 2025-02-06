@@ -4,7 +4,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from dotenv import load_dotenv
 import importlib
-import shared_models.models
+from shared_models.database import Base  # Ajusta la importación de Base
 
 # Forzar la carga de los modelos
 importlib.import_module("shared_models.models")
@@ -30,10 +30,8 @@ if config.config_file_name is not None:
 
 # Add your model's MetaData object here
 # for 'autogenerate' support
-from shared_models.database import Base  # Ajusta la importación de Base
-from shared_models.models import Account, Contact  # Importa explícitamente los modelos
-target_metadata = Base.metadata
 
+target_metadata = Base.metadata
 
 
 def run_migrations_offline():
