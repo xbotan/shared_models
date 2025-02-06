@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, Text, Enum, Integer, Index
 from sqlalchemy.dialects.mysql import CHAR
-from sqlalchemy.orm import relationship, foreign, remote, session as object_session
+from sqlalchemy.orm import relationship, foreign, remote
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
