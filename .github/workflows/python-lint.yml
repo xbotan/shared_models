@@ -28,4 +28,4 @@ jobs:
 
     - name: Run flake8
       run: |
-        flake8 . --max-line-length=79  # Ejecuta flake8 en el directorio actual
+        flake8 --config .flake8  # Ejecuta flake8 en el directorio actual
